@@ -8,7 +8,7 @@ class ViewBindHelper {
     private val TAG = "ViewBindHelper"
     private val defaultState = SwipeRevealLayout.State(1f, 0f, 0f)
     private val viewsStates = arrayListOf<SwipeRevealLayout.State>()
-    fun addCustomVIew(key: Int, cv: SwipeRevealLayout){
+    fun addStateIfNotExistAt(key: Int){
         Log.e(TAG, "try to add observer object at $key")
         if (viewsStates.elementAtOrNull(key) == null){
             Log.d(TAG, "Object observer ${viewsStates.size}")
@@ -22,10 +22,10 @@ class ViewBindHelper {
         }
     }
     //probably crash
-    private fun getView(position: Int) = viewsStates[position]
+    private fun getState(position: Int) = viewsStates[position]
 
-    fun bind(position: Int, cv: SwipeRevealLayout){
-        cv.restoreState(getView(position))
+    fun restoreState(position: Int, cv: SwipeRevealLayout){
+        cv.restoreState(getState(position))
     }
 
 
@@ -51,23 +51,20 @@ class ViewBindHelper {
                 if (e.action == MotionEvent.ACTION_DOWN){
                     Log.d(TAG, "recycler intercept ACTION_DOWN")
                     viewOnStartSwipe = rv.findChildViewUnder(e.x, e.y) as? SwipeRevealLayout
-                    return false
+                    //return false
                 } else if (e.action == MotionEvent.ACTION_MOVE){
                     Log.d(TAG, "recycler intercept ACTION_MOVE ")
                     viewOnStartSwipe?.let {
                         Log.d(TAG, "isSwiped: ${it.isActiveSwipe()}")
-                        if (it.isActiveSwipe())
-                            rv.requestDisallowInterceptTouchEvent(false)
-                        else
-                            rv.requestDisallowInterceptTouchEvent(true)
+                        rv.requestDisallowInterceptTouchEvent(!it.isActiveSwipe())
                     }
-                    return false
+                    //return false
                 } else if (e.action == MotionEvent.ACTION_UP){
                     Log.d(TAG, "recycler intercept ACTION_UP")
-                    return false
+                    //return false
                 }
                 Log.e(TAG, "${e.action}")
-                return true
+                return false
             }
 
             override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {

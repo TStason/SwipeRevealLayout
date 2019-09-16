@@ -17,14 +17,14 @@
     <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recycler"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
+            android:layout_height="400dp"/>
     <com.example.customviewgroup.SwipeRevealLayout
             android:id="@+id/customGV"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
         <TextView
                 android:id="@+id/textTest1"
-                android:text="TEST_TEST_TEST_TEST_TEST_TEST_TEST_TEST_TEST_TEST_TEST_TEST"
+                android:text="TEST"
                 android:textSize="40sp"
                 android:textColor="#000000"
                 android:layout_width="wrap_content"

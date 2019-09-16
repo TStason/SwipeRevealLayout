@@ -7,69 +7,66 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
+import java.util.ArrayList
 import kotlin.math.absoluteValue
-import kotlin.math.max
+import kotlin.math.min
 
 class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(context, attrs) {
     private val TAG = "SwipeRevealLayout"
-    private val colors = listOf(
-        "#009933",
-        "#CCFF33",
-        "#3399FF",
-        "#3300FF",
-        "#3399FF"
-    )
-    //add as param
+    //xml param
     private var numberOfLeftViews = 1
-    private var numberOfRightViews = 2
+    private var numberOfRightViews = 1
+    private var defaultBlockBackgroundColor = Color.parseColor("#000000")
+    private var defaultTextColor = Color.parseColor("#FFFFFF")
+    private var coefficientNeededToExpand = 0.2f
+    private var maxOccupyingSpaceCoefficient = 0.6f
+    private var blockWidth = 200
+    private var blockHeight = 200
     //
-    private val childViews = arrayListOf<View>()
-    private val leftViews = arrayListOf<TextView>()
-    private val rightViews = arrayListOf<TextView>()
+    private var mainBlockView: View? = null
+    private val leftBlockViews = arrayListOf<BlockView>()
+    private val rightBlockViews = arrayListOf<BlockView>()
     private var mainBlockCoefficient = 1f
     private var leftBlockCoefficient = 0f
     private var rightBlockCoefficient = 0f
-    private val coefficientNeededToExpand = 0.2f
-    //add as param
-    private var maxViewWidth = 100
-    private var maxViewHeight = 100
     //
-    private var isInitialized = false
-    private lateinit var startSwipePoint: Point
+    private var isNeededToAddChilds = true
+    private lateinit var onSwipePrevPoint: Point
     private var isActiveSwipe = false
 
     init{
+        context.theme.obtainStyledAttributes(attrs, R.styleable.SwipeRevealLayout, 0, 0).apply {
+            try{
+                numberOfLeftViews = getInteger(R.styleable.SwipeRevealLayout_numberOfLeftViews, numberOfLeftViews)
+                numberOfRightViews = getInteger(R.styleable.SwipeRevealLayout_numberOfRightViews, numberOfRightViews)
+                defaultBlockBackgroundColor = getInteger(R.styleable.SwipeRevealLayout_defaultBlockBackgroundColor, defaultBlockBackgroundColor)
+                defaultTextColor = getInteger(R.styleable.SwipeRevealLayout_defaultTextColor, defaultTextColor)
+                coefficientNeededToExpand = getFloat(R.styleable.SwipeRevealLayout_coefficientNeededToExpand, coefficientNeededToExpand)
+                maxOccupyingSpaceCoefficient = getFloat(R.styleable.SwipeRevealLayout_maxOccupyingSpaceCoefficient, maxOccupyingSpaceCoefficient)
+                blockWidth = getInteger(R.styleable.SwipeRevealLayout_blockWidth, blockWidth)
+                blockHeight = getInteger(R.styleable.SwipeRevealLayout_blockHeight, blockHeight)
+            } finally {
+                recycle()
+            }
+
+        }
         initializeComponents()
     }
 
     private fun initializeComponents(){
-        //set left views
-        for (i in 0 until numberOfLeftViews){
-            val textView = TextView(context).apply{
-                text = "test$i"
-                id = "test$i".hashCode()
-                setTextColor(Color.BLACK)
-                textSize = 15f
-                minHeight = maxViewHeight
-                maxWidth = maxViewWidth
-                setBackgroundColor(Color.parseColor(colors[i % colors.size]))
-            }
-            leftViews.add(textView)
+        leftBlockViews.initializeViews(numberOfLeftViews)
+        rightBlockViews.initializeViews(numberOfRightViews)
+    }
+
+    private fun  ArrayList<BlockView>.initializeViews(size: Int){
+        for (i in 0 until size){
+            this.add(getBlockView())
         }
-        //set right views
-        for (i in 0 until numberOfRightViews){
-            val textView = TextView(context).apply{
-                text = "TEST$i"
-                id = "TEST$i".hashCode()
-                textSize = 15f
-                setTextColor(Color.BLACK)
-                minHeight = maxViewHeight
-                maxWidth = maxViewWidth
-                setBackgroundColor(Color.parseColor(colors[i % colors.size]))
-            }
-            rightViews.add(textView)
-        }
+    }
+
+    private fun getBlockView(): BlockView = BlockView(context).apply {
+        this.setBackColor(defaultBlockBackgroundColor)
+        this.setTextColor(defaultTextColor)
     }
 
     fun restoreState(state: State){
@@ -82,118 +79,151 @@ class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(contex
 
     fun isActiveSwipe() = isActiveSwipe
 
-    fun setOnClickListenerOnSideItem(index: Int, orientation: Orientation, action: (View)-> Unit){
+    fun setOnClickListenerOnSideView(index: Int, orientation: Orientation, action: (View)-> Unit){
+        getSideViewAt(index, orientation)?.setOnClickListener(action) ?: Log.e(TAG, "some trouble")
+    }
+
+    fun setImageOnSideView(index: Int, orientation: Orientation, resource: Int){
+        getSideViewAt(index, orientation)?.setImage(resource) ?: Log.e(TAG, "some trouble")
+    }
+
+    fun setTextOnSideView(index: Int, orientation: Orientation, text: String){
+        getSideViewAt(index, orientation)?.setText(text) ?: Log.e(TAG, "some trouble")
+    }
+
+    fun setColorOnSideView(index: Int, orientation: Orientation, color: Int){
+        getSideViewAt(index, orientation)?.setBackColor(color) ?: Log.e(TAG, "some trouble")
+    }
+
+    private fun getSideViewAt(index: Int, orientation: Orientation):IBlockView? =
         when(orientation){
             Orientation.LEFT -> {
-                if (index > numberOfLeftViews - 1)
-                    throw ArrayIndexOutOfBoundsException("Size $numberOfLeftViews, you try $index")
-                leftViews[index].setOnClickListener(action)
+                leftBlockViews.getAt(index)
             }
             Orientation.RIGHT -> {
-                if (index > numberOfRightViews - 1)
-                    throw ArrayIndexOutOfBoundsException("Size $numberOfRightViews, you try $index")
-                rightViews[index].setOnClickListener(action)
+                rightBlockViews.getAt(index)
             }
-            else -> {Log.e(TAG, "This orientation not allowed at this time")}
+            else -> {
+                Log.e(TAG, "This orientation not allowed at this time")
+                null
+            }
         }
+
+    private fun <T> ArrayList<T>.getAt(index: Int): T? {
+        if (index < 0 || index >= numberOfRightViews){
+            //throw ArrayIndexOutOfBoundsException("Size $numberOfRightViews, you try $index")
+            return null
+        }
+        return this[index]
+    }
+
+    override fun onAttachedToWindow() {
+        Log.d(TAG, "onAttachedToWindow")
+        if (isNeededToAddChilds){
+            setMainBlockView()
+            addSideChilds()
+            isNeededToAddChilds = false
+        }
+        super.onAttachedToWindow()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val widthMode = MeasureSpec.getMode(widthMeasureSpec)
-        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
-        val width: Int
-        var height: Int
-        if (widthMode == MeasureSpec.EXACTLY || widthMode == MeasureSpec.AT_MOST){
-            width = MeasureSpec.getSize(widthMeasureSpec)
-        }
-        else {
-            width = 500
-        }
-        if (heightMode == MeasureSpec.EXACTLY || heightMode == MeasureSpec.AT_MOST){
-            height = MeasureSpec.getSize(heightMeasureSpec)
-        }
-        else {
-            height = 400
-        }
-        if (!isInitialized){
-            maxViewWidth = ((width * 0.6) / max(numberOfRightViews, numberOfLeftViews)).toInt()
-            maxViewHeight = max(maxViewWidth, maxViewHeight)
-            updateComponents()
-            isInitialized = true
-        }
-        Log.e(TAG, "onMeasure ${childCount - numberOfLeftViews - numberOfRightViews}")
-        for(i in 0 until childCount - numberOfLeftViews - numberOfRightViews){
-            measureChild(childViews[i],widthMeasureSpec, heightMeasureSpec)
-            height = childViews[i].measuredHeight
-            Log.e(TAG, "measure child $i height -> $height")
-        }
-        //measure left views
-        leftViews.forEach{
-            measureChild(it, widthMeasureSpec, heightMeasureSpec)
-        }
-        //measure right views
-        rightViews.forEach{
-            measureChild(it, widthMeasureSpec, heightMeasureSpec)
-        }
-        
-        setMeasuredDimension(width, height)
+        var swipeRevealLayoutWidth: Int = 0
+        var swipeRevealLayoutHeight: Int = 0
+        //
+//        if (isNeededToAddChilds){
+//            setMainBlockView()
+//            addSideChilds()
+//            isNeededToAddChilds = false
+//        }
+        //measure childs
+        //measureChildren(widthMeasureSpec, heightMeasureSpec)
+        measureMainBlockView(widthMeasureSpec, heightMeasureSpec)
+        measureChilds()
+        //MeasureSpec state processing
+        swipeRevealLayoutWidth = recognizeSize(widthMeasureSpec, mainBlockView!!.measuredWidth)
+        swipeRevealLayoutHeight = recognizeSize(heightMeasureSpec, mainBlockView!!.measuredHeight)
+
+        setMeasuredDimension(swipeRevealLayoutWidth, swipeRevealLayoutHeight)
     }
 
-    private fun updateComponents(){
-        //set outside views
+    private fun setMainBlockView(){
+        //set user view
+        mainBlockView = getChildAt(0)
+    }
+
+    private fun addSideChilds(){
         Log.d(TAG, "childs $childCount")
-        for (i in 0 until childCount)
-            childViews.add(getChildAt(i))
         //add left views
         for (i in 0 until numberOfLeftViews){
-            leftViews[i].apply{
-                minHeight = maxViewHeight
-                maxWidth = maxViewWidth
-            }
-            addView(leftViews[i])
+            addView(leftBlockViews[i])
         }
         //add right views
         for (i in 0 until numberOfRightViews){
-            rightViews[i].apply{
-                minHeight = maxViewHeight
-                maxWidth = maxViewWidth
-            }
-            addView(rightViews[i])
+            addView(rightBlockViews[i])
         }
+    }
+
+    private fun measureMainBlockView(widthMeasureSpec: Int, heightMeasureSpec: Int){
+        measureChild(getChildAt(0), widthMeasureSpec, heightMeasureSpec)
+    }
+
+    private fun measureChilds(){
+        val heightMeasureSpec = MeasureSpec.makeMeasureSpec(blockHeight, MeasureSpec.EXACTLY)
+        val widthMeasureSpec = MeasureSpec.makeMeasureSpec(blockWidth, MeasureSpec.EXACTLY)
+        for (i in 1 until childCount)
+            measureChild(getChildAt(i), widthMeasureSpec, heightMeasureSpec)
+    }
+
+    private fun recognizeSize(measureSpec: Int, measuredSize: Int): Int {
+        when (MeasureSpec.getMode(measureSpec)){
+            MeasureSpec.EXACTLY -> {
+                Log.d(TAG, "onMeasure EXACTLY")
+                return MeasureSpec.getSize(measureSpec)
+            }
+            MeasureSpec.AT_MOST ->{
+                Log.d(TAG, "onMeasure AT_MOST")
+                return min(measuredSize, MeasureSpec.getSize(measureSpec))
+            }
+            MeasureSpec.UNSPECIFIED -> {
+                Log.d(TAG, "onMeasure UNSPECIFIED")
+                return measuredSize
+            }
+        }
+        return 0
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         val widthVG = r - l
-        Log.e(TAG, "onLayput: $changed , $l left, $t top, $r right, $b bottom")
         if ((childCount - numberOfLeftViews - numberOfRightViews) != 1)
-            throw IllegalArgumentException("Work with only one child! You set ${childCount - numberOfLeftViews - numberOfRightViews}")
-        childViews.forEach {
+            throw IllegalArgumentException("Work with only one child! You try ${childCount - numberOfLeftViews - numberOfRightViews}")
+        mainBlockView?.let {
             it.layout(
-                (widthVG * leftBlockCoefficient - widthVG * rightBlockCoefficient).toInt(),
+                paddingStart + (widthVG * (leftBlockCoefficient - rightBlockCoefficient)).toInt(),
                 paddingTop,
-                (widthVG - widthVG * rightBlockCoefficient).toInt(),
-                paddingTop+it.measuredHeight
+                (widthVG - widthVG * rightBlockCoefficient).toInt() - paddingEnd,
+                paddingTop+it.measuredHeight - paddingBottom
             )
         }
-        var rightPrevViewLeftCorner = (widthVG - widthVG * rightBlockCoefficient).toInt()
-        rightViews.forEach {
+        var rightPrevViewLeftCorner = (widthVG - widthVG * rightBlockCoefficient).toInt() - paddingEnd
+        rightBlockViews.forEach {
             it.layout(
                 rightPrevViewLeftCorner,
                 paddingTop,
                 (rightPrevViewLeftCorner + widthVG * rightBlockCoefficient / numberOfRightViews).toInt(),
-                paddingTop+it.measuredHeight
+                paddingTop+it.measuredHeight - paddingBottom
             )
-            rightPrevViewLeftCorner = (rightPrevViewLeftCorner + widthVG * rightBlockCoefficient / numberOfRightViews).toInt()
+            rightPrevViewLeftCorner += (widthVG * rightBlockCoefficient / numberOfRightViews).toInt()
         }
-        var leftPrevViewRightCorner = l
-        leftViews.forEach {
+        var leftPrevViewRightCorner = paddingStart
+        leftBlockViews.forEach {
             it.layout(
                 leftPrevViewRightCorner,
                 paddingTop,
                 leftPrevViewRightCorner + (widthVG * leftBlockCoefficient / numberOfLeftViews).toInt(),
-                paddingTop+it.measuredHeight
+                paddingTop+it.measuredHeight - paddingBottom
             )
-            leftPrevViewRightCorner = l + (widthVG * leftBlockCoefficient / numberOfLeftViews).toInt()
+            leftPrevViewRightCorner += (widthVG * leftBlockCoefficient / numberOfLeftViews).toInt()
         }
     }
 
@@ -204,7 +234,7 @@ class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(contex
             }
             else if (event.action == MotionEvent.ACTION_MOVE){
                 Log.e(TAG, "SwipeRevealLayout TouchEvent ACTION_MOVE")
-                calculateView(Point(event.rawX, event.rawY))
+                calculateBlocksCoefficients(Point(event.rawX, event.rawY))
                 isActiveSwipe = true
             } else if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL){
                 Log.e(TAG, "SwipeRevealLayout TouchEvent END")
@@ -222,11 +252,11 @@ class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(contex
         event?.let{
             if (event.action == MotionEvent.ACTION_DOWN){
                 Log.e(TAG, "SwipeRevealLayout Intercept DOWN")
-                setStartSwipePoint(Point(event.rawX, event.rawY))
+                setPrevPoint(Point(event.rawX, event.rawY))
             } else if (event.action == MotionEvent.ACTION_MOVE){
                 Log.e(TAG, "SwipeRevealLayout Intercept MOVE")
-                val deltaY = (startSwipePoint.y - event.rawY).absoluteValue
-                val deltaX = (startSwipePoint.x - event.rawX).absoluteValue
+                val deltaY = (onSwipePrevPoint.y - event.rawY).absoluteValue
+                val deltaX = (onSwipePrevPoint.x - event.rawX).absoluteValue
                 return deltaY < deltaX
             } else if (event.action == MotionEvent.ACTION_UP){
                 Log.e(TAG, "SwipeRevealLayout Intercept UP")
@@ -235,15 +265,15 @@ class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(contex
         return super.onInterceptTouchEvent(event)
     }
 
-    private fun setStartSwipePoint(point: Point){
-        startSwipePoint = point
+    private fun setPrevPoint(point: Point){
+        onSwipePrevPoint = point
     }
 
-    private fun calculateView(pointTo: Point){
+    private fun calculateBlocksCoefficients(currentPoint: Point){
         val layoutWidth = this.width
-        val delta = startSwipePoint.x - pointTo.x
+        val delta = onSwipePrevPoint.x - currentPoint.x
         val shiftPercent = delta / layoutWidth
-        setStartSwipePoint(pointTo)
+        setPrevPoint(currentPoint)
         when(getSwipeHorizontalOrientation(delta)){
             Orientation.LEFT -> {
                 if (leftBlockCoefficient > 0f){
@@ -267,21 +297,24 @@ class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(contex
     }
 
     private fun stopSwiping(){
-        val layoutWidth = this.width
-        val q = maxViewWidth.toFloat() / layoutWidth
         if(rightBlockCoefficient >= coefficientNeededToExpand){
-            rightBlockCoefficient = q*numberOfRightViews
+            rightBlockCoefficient = calculateCoefficient(numberOfRightViews)
             leftBlockCoefficient = 0f
         } else if (leftBlockCoefficient >= coefficientNeededToExpand){
-            leftBlockCoefficient = q*numberOfLeftViews
+            leftBlockCoefficient = calculateCoefficient(numberOfLeftViews)
             rightBlockCoefficient = 0f
         } else {
             leftBlockCoefficient = 0f
             rightBlockCoefficient = 0f
         }
-        //Log.d(TAG, "rightBlockCoefficient -> $rightBlockCoefficient; leftBlockCoefficient -> $leftBlockCoefficient")
         this.requestLayout()
         this.invalidate()
+    }
+
+    private fun calculateCoefficient(size: Int): Float{
+        val layoutWidth = this.width
+        val tmp = size * blockWidth.toFloat() / layoutWidth
+        return min(tmp, maxOccupyingSpaceCoefficient)
     }
 
     private fun getSwipeVerticalOrientation(delta: Float): Orientation =
@@ -293,5 +326,12 @@ class SwipeRevealLayout(context: Context, attrs: AttributeSet): ViewGroup(contex
     data class State(var mainBlockCoefficient: Float, var leftBlockCoefficient: Float, var rightBlockCoefficient: Float)
     interface ISwipeRevealLayout{
         fun getLayout(): SwipeRevealLayout
+    }
+    interface IBlockView{
+        fun setImage(resId: Int)
+        fun setText(text: String)
+        fun setBackColor(color: Int)
+        fun setTextColor(color: Int)
+        fun setOnClickListener(action: (View)-> Unit)
     }
 }
