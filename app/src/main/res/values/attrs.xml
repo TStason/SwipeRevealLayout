@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="SwipeRevealLayout">
+        <attr name="numberOfLeftViews" format="integer"/>
+        <attr name="numberOfRightViews" format="integer"/>
+        <attr name="defaultBlockBackgroundColor" format="integer"/>
+        <attr name="defaultTextColor" format="integer"/>
+        <attr name="coefficientNeededToExpand" format="float"/>
+        <attr name="maxOccupyingSpaceCoefficient" format="float"/>
+        <attr name="blockWidth" format="integer"/>
+        <attr name="blockHeight" format="integer"/>
+    </declare-styleable>
+</resources>
